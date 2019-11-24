@@ -164,9 +164,12 @@ public class Server{
 						    			break;
 						    		case 5: playerListHelper.out.writeObject(playerMsg); //5 - Update the ArrayList
 					    				break;
+					    			default:
+					    				break;
 						    		}//end of switch
 						    	}//end of else
 					    	}//end of try
+					    catch(Exception e) {}
 					    }//end of while
 		    	}//end of if stmt for main thread
 		    	else if (Thread.currentThread().getName() == oppReqHelper.getName()) {
@@ -187,7 +190,6 @@ public class Server{
 			}//end of try (connection try)
 			catch(Exception e) {
 				 callback.accept("OOOOPPs...Server closing down!");
-				  break;
 			}
 		}//end of run
 		
@@ -392,8 +394,8 @@ public class Server{
 			}
 			
 			public void updateAllClients() {
-				for(int i = 0; i < clients.size(); i++) {
-					ClientThread t = clients.get(i);
+				for(int i = 0; i < players.size(); i++) {
+					ClientThread t = players.get(i);
 					try {
 					 t.out.writeObject(gi);
 					 t.out.reset();
@@ -403,7 +405,7 @@ public class Server{
 			}
 			
 			public void updateSpecificClient( Gameinfo gi) {
-					ClientThread t = clients.get(gi.player);
+					ClientThread t = players.get(gi.player);
 					try {
 					 t.out.writeObject(gi);
 					}
@@ -422,7 +424,7 @@ public class Server{
 						gi.onlinePlayers.set(gi.player, 1); // makes the player status as available
 						} catch( IOException | ClassNotFoundException e) {}
 					
-					System.out.println("SERVER: Set up streams with client" + (clients.size()+1) );
+					System.out.println("SERVER: Set up streams with client" + (players.size()+1) );
 					
 					if(gi.opp_id == -1) { // if there are no opponents at this moment
 						synchronized(this) {
