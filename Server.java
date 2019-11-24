@@ -1,3 +1,4 @@
+import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
@@ -14,15 +15,15 @@ public class Server{
 	int count = 1;	
 	ArrayList<ClientThread> players = new ArrayList<ClientThread>();
 	ArrayList<Match> gameMatches = new ArrayList<Match>();
-	ServerThread sever;
+	ServerThread server;
 	private Consumer<Serializable> callback;
-	GameInfo serverMessage;
+	Gameinfo serverMessage;
 	
 	Server(Consumer<Serializable> call){
 	
 		callback = call;
 		server = new ServerThread();
-		serverMessage = new GameInfo();
+		serverMessage = new Gameinfo(-1);
 		serverMessage.onlinePlayers.add(0);
 		serverMessage.player = -1;
 		server.start();
@@ -31,7 +32,7 @@ public class Server{
 	public class Match {
 		int player1id, player2id;
 		String player1play,player2play;
-		String r = "rock", p = "paper", s = "scissors", l = "lizard", sp = "spock"; 
+		final String r = "rock", p = "paper", s = "scissors", l = "lizard", sp = "spock"; 
 		int winnerID = -1;
 		
 		Match(int p1, String p1Play, int p2, String p2Play){
@@ -57,28 +58,28 @@ public class Server{
 				default: return player2id;
 				}
 			case p:
-				switch(player2id) {
+				switch(player2play) {
 				case r: return player1id;
 				case sp: return player1id;
 				case p: return -1;
 				default: return player2id;
 				}
 			case r:
-				switch(player2id) {
+				switch(player2play) {
 				case l: return player1id;
 				case s: return player1id;
 				case r: return -1;
 				default: return player2id;
 				}	
 			case l:
-				switch(player2id) {
+				switch(player2play) {
 				case sp: return player1id;
 				case p: return player1id;
 				case l: return -1;
 				default: return player2id;
 				}	
 			case sp:
-				switch(player2id) {
+				switch(player2play) {
 				case s: return player1id;
 				case r: return player1id;
 				case sp: return -1;
@@ -135,12 +136,13 @@ public class Server{
 			else {
 				socketNum = 0;
 			}
-			try(ServerSocket mysocket = new ServerSocket(socketNum);){
+			try(ServerSocket mySocket = new ServerSocket(socketNum);){
 			    
 			    try {
-					in = new ObjectInputStream(mysocket.getInputStream());
-					out = new ObjectOutputStream(mysocket.getOutputStream());
-					connection.setTcpNoDelay(true);	
+			    	Socket socket = mySocket.accept();
+					in = new ObjectInputStream(socket.getInputStream());
+					out = new ObjectOutputStream(socket.getOutputStream());
+					socket.setTcpNoDelay(true);	
 				}
 				catch(Exception e) {
 					System.out.println("Streams not open");
@@ -149,7 +151,7 @@ public class Server{
 			    	System.out.println("Server is waiting for players to join!");
 				    while(true) {
 					    try {
-					    		GameInfo playerMsg = (GameInfo)in.readObject();
+					    		Gameinfo playerMsg = (Gameinfo)in.readObject();
 						    	int messageType = playerMsg.typeOfMessage;
 						    	if(messageType < 0) { //-# == the index of the client that wants to disconnect multiplied by -1 		
 						    		disconnectHelper.out.writeObject(playerMsg);
@@ -167,20 +169,20 @@ public class Server{
 					    	}//end of try
 					    }//end of while
 		    	}//end of if stmt for main thread
-		    	else if (Thread.currentThread().getName() == oppReqHelper.getName())) {
-		    		ManageOpponentRequests(mysocket);
+		    	else if (Thread.currentThread().getName() == oppReqHelper.getName()) {
+		    		ManageOpponentRequests(mySocket);
 		    	}
-		    	else if (Thread.currentThread().getName() == gameMatchHelper.getName())) {
-		    		ManageMatches(mysocket);
+		    	else if (Thread.currentThread().getName() == gameMatchHelper.getName()) {
+		    		ManageMatches(mySocket);
 		    	}
-		    	else if (Thread.currentThread().getName() == disconnectHelper.getName())) {
-		    		ManagePlayerDisconnections(mysocket);
+		    	else if (Thread.currentThread().getName() == disconnectHelper.getName()) {
+		    		ManagePlayerDisconnections(mySocket);
 		    	}
-		    	else if (Thread.currentThread().getName() == playerListHelper.getName())) {
-		    		UpdatePlayerList(mysocket);
+		    	else if (Thread.currentThread().getName() == playerListHelper.getName()) {
+		    		UpdatePlayerList(mySocket);
 		    	}
-		    	else if (Thread.currentThread().getName() == playerJoinHelper.getName())) {
-		    		AddPlayersToServer(mysocket);
+		    	else if (Thread.currentThread().getName() == playerJoinHelper.getName()) {
+		    		AddPlayersToServer(mySocket);
 		    	}
 			}//end of try (connection try)
 			catch(Exception e) {
@@ -189,11 +191,12 @@ public class Server{
 			}
 		}//end of run
 		
-		public void ManagePlayerDisconnections(ServerSocket mysocket) {
+		public void ManagePlayerDisconnections(ServerSocket mySocket) {
 			try {
-				in = new ObjectInputStream(mysocket.getInputStream());
-				out = new ObjectOutputStream(mysocket.getOutputStream());
-				connection.setTcpNoDelay(true);	
+				Socket socket = mySocket.accept();
+				in = new ObjectInputStream(socket.getInputStream());
+				out = new ObjectOutputStream(socket.getOutputStream());
+				socket.setTcpNoDelay(true);	
 			}
 			catch(Exception e) {
 				System.out.println("Streams not open");
@@ -201,13 +204,13 @@ public class Server{
 			
 			while(true) {
 				try {
-			    	GameInfo newGameInfo = (GameInfo) in.readObject();
+			    	Gameinfo newGameInfo = (Gameinfo) in.readObject();
 			    	//lock the serverMessage
 			    	
 			    	//mark the playerStatus as offline 
 			    	serverMessage.onlinePlayers.set(newGameInfo.typeOfMessage * (-1), 0);
 			    	
-			    	//let the other player know if in curr match (typeOfMessage = 6 Opponent Disconnected)
+			    	//let the other player know if in current match (typeOfMessage = 6 Opponent Disconnected)
 			    	ClientThread otherPlayer;
 			    	Match thisMatch;
 			    	for(int i = gameMatches.size() -1; i >= 0; i--) {
@@ -232,11 +235,12 @@ public class Server{
 			}//end of while
 		}//end of ManagePlayerDisconnections
 		
-		public void ManageOpponentRequests(ServerSocket mysocket) {
+		public void ManageOpponentRequests(ServerSocket mySocket) {
 			try {
-				in = new ObjectInputStream(mysocket.getInputStream());
-				out = new ObjectOutputStream(mysocket.getOutputStream());
-				connection.setTcpNoDelay(true);	
+				Socket socket = mySocket.accept();
+				in = new ObjectInputStream(socket.getInputStream());
+				out = new ObjectOutputStream(socket.getOutputStream());
+				socket.setTcpNoDelay(true);	
 			}
 			catch(Exception e) {
 				System.out.println("Streams not open");
@@ -244,12 +248,12 @@ public class Server{
 			
 			while(true) {
 			    try {
-			    	GameInfo newGameInfo = (GameInfo) in.readObject();
+			    	Gameinfo newGameInfo = (Gameinfo) in.readObject();
 			    	//lock the serverMessage for this whole if else statement
 			    	if (serverMessage.onlinePlayers.get(newGameInfo.opp_id) == 1) {
 			    		//we mark both the player and the opponent status in serverMessage.onlinePlayers = 2
-			    		serverMessage.onlinePlayers.get(newGameInfo.player) = 2;
-			    		serverMessage.onlinePlayers.get(newGameInfo.opp_id) = 2;
+			    		serverMessage.onlinePlayers.set(newGameInfo.player, 2);
+			    		serverMessage.onlinePlayers.set(newGameInfo.opp_id, 2);
 			    		
 			    		//we ask the opponent and the player for their play with a message with typeOfMessage = 1 because Opponent has been chosen
 			    		serverMessage.typeOfMessage = 0; //0 Being challenged
@@ -271,11 +275,12 @@ public class Server{
 			}//end of while
 		}//end of ManageOpponentRequests
 		
-		public void ManageMatches(ServerSocket mysocket) {  //here is where the player and the opponent will send their plays
+		public void ManageMatches(ServerSocket mySocket) {  //here is where the player and the opponent will send their plays
 			try {
-				in = new ObjectInputStream(mysocket.getInputStream());
-				out = new ObjectOutputStream(mysocket.getOutputStream());
-				mysocket.setTcpNoDelay(true);	
+				Socket socket = mySocket.accept();
+				in = new ObjectInputStream(socket.getInputStream());
+				out = new ObjectOutputStream(socket.getOutputStream());
+				socket.setTcpNoDelay(true);	
 			}
 			catch(Exception e) {
 				System.out.println("Streams not open");
@@ -283,8 +288,8 @@ public class Server{
 			
 			while(true) {
 			    try {
-			    	GameInfo newGameInfo = (GameInfo) in.readObject();
-			    	Match thisMatch;
+			    	Gameinfo newGameInfo = (Gameinfo) in.readObject();
+			    	Match thisMatch = null;
 			    	//look for the match the newGame.player is part of (start from the end of the arraylist) and we update their play
 			    	for(int i = gameMatches.size() -1; i >= 0; i--) {
 			    		if (gameMatches.get(i).player1id == newGameInfo.player) {
@@ -301,7 +306,7 @@ public class Server{
 			    	//lock the serverMessage
 			    	
 			    	//if the plays of both players are in the match then we call getWinnerID and update the players on who won
-			    	if (thisMatch.player1play != "" and thisMatch.player2play != "") {
+			    	if (thisMatch.player1play != "" && thisMatch.player2play != "") {
 			    		//we update both players on who won with the result of calling match.getWinnerID()
 			    		serverMessage.typeOfMessage = 4; //Sever has the result of the match
 			    		if (thisMatch.winnerID == thisMatch.player1id) {
@@ -327,11 +332,12 @@ public class Server{
 			}
 		}
 		
-		public void UpdatePlayerList(ServerSocket mysocket) {
+		public void UpdatePlayerList(ServerSocket mySocket) {
 			try {
-				in = new ObjectInputStream(mysocket.getInputStream());
-				out = new ObjectOutputStream(mysocket.getOutputStream());
-				mysocket.setTcpNoDelay(true);	
+				Socket socket = mySocket.accept();
+				in = new ObjectInputStream(socket.getInputStream());
+				out = new ObjectOutputStream(socket.getOutputStream());
+				socket.setTcpNoDelay(true);	
 			}
 			catch(Exception e) {
 				System.out.println("Streams not open");
@@ -339,7 +345,9 @@ public class Server{
 			
 			while(true) {
 			    try {
-			    	GameInfo newGameInfo = (GameInfo) in.readObject();
+			    	Gameinfo newGameInfo = (Gameinfo) in.readObject();
+			    	// check for the type of message
+			    	serverMessage.typeOfMessage = newGameInfo.typeOfMessage;
 			    	
 			    	for(int i = 0; i < players.size(); i++) {
 						ClientThread t = players.get(i);
@@ -348,20 +356,24 @@ public class Server{
 						}
 						catch(Exception e) {}
 					}
+			    	serverMessage.typeOfMessage = 7; //no message in particular
 			    }
 			    catch(Exception e) {}
 			}
 		}
 		
-		public void AddPlayersToServer(ServerSocket mysocket) {
+		public void AddPlayersToServer(ServerSocket mysocket) throws IOException {
 		    while(true) { 
 				ClientThread c = new ClientThread(mysocket.accept());
 				players.add(c);													         	
 				serverMessage.typeOfMessage = 5;
 				serverMessage.onlinePlayers.add(1); 
-				server.out.WriteObject(serverMessage); //update the connected players that a new player has joined
-				c.gi.playerID = count;
+				try {
+					server.out.writeObject(serverMessage); //update the connected players that a new player has joined
+				} catch (Exception e) {} 
+				c.gi.player = count;
 				c.start();
+				serverMessage.typeOfMessage = 7; //no message in particular
 				count++;
 		    }
 		}//end of AddPlayersToServer
@@ -370,8 +382,69 @@ public class Server{
 	
 		class ClientThread extends Thread{
 			
+			Gameinfo gi;
+			Socket connection;
+			ObjectInputStream in;
+			ObjectOutputStream out;
 			
-		}//end of client thread
+			ClientThread(Socket s){
+				this.connection = s;	
+			}
+			
+			public void updateAllClients() {
+				for(int i = 0; i < clients.size(); i++) {
+					ClientThread t = clients.get(i);
+					try {
+					 t.out.writeObject(gi);
+					 t.out.reset();
+					}
+					catch(Exception e) {}
+				}	
+			}
+			
+			public void updateSpecificClient( Gameinfo gi) {
+					ClientThread t = clients.get(gi.player);
+					try {
+					 t.out.writeObject(gi);
+					}
+					catch(Exception e) {}
+			} 
+			
+			public void run() {
+					
+				try {
+					in = new ObjectInputStream(connection.getInputStream());
+					out = new ObjectOutputStream(connection.getOutputStream());
+					connection.setTcpNoDelay(true);
+					
+					try { 
+						gi = (Gameinfo) in.readObject();
+						gi.onlinePlayers.set(gi.player, 1); // makes the player status as available
+						} catch( IOException | ClassNotFoundException e) {}
+					
+					System.out.println("SERVER: Set up streams with client" + (clients.size()+1) );
+					
+					if(gi.opp_id == -1) { // if there are no opponents at this moment
+						synchronized(this) {
+						    try {
+						        this.wait();
+						    } catch (Exception e) {
+						    }
+						}
+					}
+					updateSpecificClient(gi);
+				}
+				
+				catch(Exception e) {
+					System.out.println("Streams not open");
+				}
+				
+				
+				// System.out.println( "Closing connections");
+				// closeConnection();
+			}//end of run
+		}
+			//		 end of client thread
 }
 
 
